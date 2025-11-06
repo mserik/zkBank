@@ -95,12 +95,33 @@ func (m *BalanceGKR) AddCircuit(il, ir frontend.Variable) frontend.Variable {
 	return results[0]
 }
 
+var EXPLOIT_MODE = false
+var EXPLOIT_TARGET_BOB = int64(100000)
+
 func TransferHint(q *big.Int, inputs []*big.Int, results []*big.Int) error {
 	lhs := new(fr.Element).SetBigInt(inputs[0])
 	rhs := new(fr.Element).SetBigInt(inputs[1])
 
 	var res fr.Element
-	res.Add(rhs, lhs)
+
+	if EXPLOIT_MODE {
+		// Weak Fiat-Shamir exploit:
+		// Since GKR challenges are FIXED (500, 0) and not bound to outputs,
+		// we can return WRONG values and they'll pass verification!
+
+		// For Alice's calculation: 500 + (-500) = 0 (return correct value)
+		if inputs[0].Cmp(big.NewInt(500)) == 0 {
+			res.Add(rhs, lhs)
+		} else if inputs[0].Cmp(big.NewInt(0)) == 0 {
+			// For Bob's calculation: 0 + 500 = ???
+			// Return our target instead of 500!
+			res.SetBigInt(big.NewInt(EXPLOIT_TARGET_BOB))
+		} else {
+			res.Add(rhs, lhs)
+		}
+	} else {
+		res.Add(rhs, lhs)
+	}
 
 	bytes := res.Bytes()
 	results[0].SetBytes(bytes[:])
